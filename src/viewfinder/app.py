@@ -57,7 +57,8 @@ class Viewfinder(App):
     #viewer {{ width: auto; height: auto; }}
     #tree {{ height: 12; background: black; border-top: solid #333333; scrollbar-size: 1 1; }}
     #tree ListItem {{ background: black; color: #a0a0a0; padding: 0 1; }}
-    #tree ListItem.--highlight {{ background: #1e293b; color: {ACCENT}; }}
+    #tree ListItem.-highlight {{ background: #1e3a4f; color: {ACCENT}; text-style: bold; }}
+    #tree:focus > ListItem.-highlight {{ background: {ACCENT}; color: black; text-style: bold; }}
     #footer {{ height: 1; padding: 0 1; background: black; }}
     #keys {{ width: 1fr; color: #6b7280; overflow: hidden; }}
     #brand {{ width: auto; color: #6b7280; text-align: right; }}
@@ -111,6 +112,7 @@ class Viewfinder(App):
         self._render_footer("waiting for media")
         self._render_header(None)
         self.set_interval(0.25, self._poll_queue)
+        self.query_one("#tree", ListView).focus()
         hist = state.history()
         if hist and hist[-1].exists():
             self.idx = len(hist) - 1
@@ -266,6 +268,7 @@ class Viewfinder(App):
         if self.current:
             self._highlight_in_tree(self.current)
         self.query_one("#tree").remove_class("hidden")
+        self.query_one("#tree", ListView).focus()
 
     def _highlight_in_tree(self, path: Path) -> None:
         tree = self.query_one("#tree", ListView)
