@@ -16,9 +16,10 @@ import time
 from textual.widgets import ListItem, ListView, Static
 
 from . import state
-from .media import Info, contact_sheet, extract_frames, probe
+from .media import Info, contact_sheet, extract_frames, probe, waveform
 
 ACCENT = "#7dd3fc"
+_UNSET = object()
 
 
 def _image_widget_class(protocol: str):
@@ -27,6 +28,10 @@ def _image_widget_class(protocol: str):
         "auto": w.Image, "sixel": w.SixelImage, "tgp": w.TGPImage,
         "halfcell": w.HalfcellImage, "unicode": w.UnicodeImage,
     }[protocol]
+
+
+def _mark(p: Path) -> str:
+    return "▶ " if state.is_video(p) else ("♪ " if state.is_audio(p) else "  ")
 
 
 class Entry(ListItem):
@@ -81,9 +86,10 @@ class Viewfinder(App):
         self.frames: list[Path] = []
         self.frame_i = 0
         self._player = None
-        self._sig = None
+        self._sig: object = _UNSET
         self._fullscreen = False
         self.panel = "tree"  # or "history"
+        self._preview_timer = None
         self.collapsed: set[str] = set()
 
     # ----- layout -------------------------------------------------------
@@ -118,7 +124,7 @@ class Viewfinder(App):
         sig = state.signature()
         if sig == self._sig:
             return
-        first = self._sig is None
+        first = self._sig is _UNSET
         self._sig = sig
         if first:
             return  # the initial state was handled in on_mount
@@ -138,6 +144,10 @@ class Viewfinder(App):
             self._render_header(path, "contact sheet · space to play")
             viewer.image = None
             self._load_sheet(path)
+        elif state.is_audio(path):
+            self._render_header(path, "waveform · space to play")
+            viewer.image = None
+            self._load_wave(path)
         else:
             self._render_header(path)
             viewer.image = str(path)
@@ -154,13 +164,19 @@ class Viewfinder(App):
         if sheet and self.current == path:
             self.call_from_thread(self._set_image, str(sheet))
 
+    @work(thread=True, exclusive=True, group="sheet")
+    def _load_wave(self, path: Path) -> None:
+        wave = waveform(path)
+        if wave and self.current == path:
+            self.call_from_thread(self._set_image, str(wave))
+
     def _set_image(self, src: str | None) -> None:
         self.query_one("#viewer").image = src
 
     def _render_header(self, path: Path | None, note: str = "") -> None:
         hdr = self.query_one("#header", Static)
         if path is None:
-            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by STRANGELOOP[/]   [dim]waiting for media · {self.protocol}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
+            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by STRANGELOOP[/]   [dim]waiting for media · {self._effective_protocol()}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
             return
         meta = self.info.human() if self.info else ""
         hist = state.history()
@@ -168,8 +184,8 @@ class Viewfinder(App):
         hdr.update(f"[{ACCENT} bold]{path.name}[/]  [dim]{pos}[/]\n[dim]{meta}   {note}[/]")
 
     def _render_footer(self, msg: str = "") -> None:
-        keys = "space play  n/p  h history  y copy  o open  t tree  f full  q quit"
-        tail = msg or f"[{ACCENT}]VIEWFINDER[/] by STRANGELOOP"
+        keys = "space play  n/p  h hist  y copy  o open  t tree  f full  q quit"
+        tail = msg or f"[{ACCENT}]VIEWFINDER[/] by STRANGELOOP · {self._effective_protocol()}"
         self.query_one("#footer", Static).update(f"{keys}    [dim]{tail}[/]")
 
     # ----- tree ---------------------------------------------------------
@@ -186,7 +202,7 @@ class Viewfinder(App):
         files.sort(key=lambda e: e.stat().st_mtime, reverse=True)
         items = [Entry(d.parent, f"[dim]..[/]  [dim]{d}[/]")]
         items += [Entry(e, f"[{ACCENT}]{e.name}/[/]") for e in dirs[:20]]
-        items += [Entry(e, f"{'▶ ' if state.is_video(e) else '  '}{e.name}") for e in files[:200]]
+        items += [Entry(e, f"{_mark(e)}{e.name}") for e in files[:200]]
         tree.extend(items)
 
     def _populate_history(self) -> None:
@@ -210,8 +226,7 @@ class Viewfinder(App):
                 seen.add(e.path)
                 when = time.strftime("%H:%M", time.localtime(e.ts)) if e.ts else "--:--"
                 tag = f"  [dim]{e.agent}·{e.session_tag}[/]" if e.session_tag else (f"  [dim]{e.agent}[/]" if e.agent else "")
-                mark = "▶ " if state.is_video(e.path) else "  "
-                items.append(Entry(e.path, f"  [dim]{when}[/]  {mark}{e.path.name}{tag}"))
+                items.append(Entry(e.path, f"  [dim]{when}[/]  {_mark(e.path)}{e.path.name}{tag}"))
         tree.extend(items or [Entry(Path.cwd(), "[dim]no history yet[/]")])
 
     def action_toggle_history(self) -> None:
@@ -230,6 +245,19 @@ class Viewfinder(App):
             if isinstance(item, Entry) and item.path == path:
                 tree.index = i
                 break
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        item = event.item
+        if not isinstance(item, Entry) or item.path.is_dir() or item.path == self.current:
+            return
+        if self._preview_timer:
+            self._preview_timer.stop()
+        self._preview_timer = self.set_timer(0.12, lambda: self._preview(item.path))
+
+    def _preview(self, path: Path) -> None:
+        self._preview_timer = None
+        if path.exists() and path != self.current:
+            self.show(path, refresh_tree=False)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         item = event.item
@@ -318,7 +346,7 @@ class Viewfinder(App):
 
     # ----- video playback -----------------------------------------------
     def action_play(self) -> None:
-        if not self.current or not state.is_video(self.current):
+        if not self.current or not (state.is_video(self.current) or state.is_audio(self.current)):
             return
         if self._player:
             self._stop_player()
@@ -334,10 +362,24 @@ class Viewfinder(App):
     def _play_with_mpv(self, mpv: str, path: Path) -> None:
         """Hand the pane to mpv (real frame rate), return to the app when it quits."""
         vo = {"sixel": "sixel", "tgp": "kitty"}.get(self._effective_protocol(), "tct")
+        conf = state.HOME / "mpv-input.conf"
+        if not conf.exists():
+            conf.write_text("ESC quit\nq quit\nSPACE cycle pause\n")
         cmd = [mpv, f"--vo={vo}", "--really-quiet", "--loop=inf", "--osd-level=0",
-               "--input-terminal=yes", "--term-osd=no", str(path)]
-        if vo == "sixel":
-            cmd += ["--vo-sixel-config-clear=yes", "--vo-sixel-alt-screen=yes"]
+               "--input-terminal=yes", "--term-osd=no", f"--input-conf={conf}", str(path)]
+        if state.is_audio(path):
+            cmd += ["--vo=null", "--term-osd=yes", "--term-status-msg=♪ ${time-pos} / ${duration}   ESC to stop"]
+        elif vo == "sixel":
+            cols, rows = self.size.width, self.size.height
+            try:
+                from textual_image._terminal import get_cell_size
+                cs = get_cell_size()
+                cw, ch = int(cs.width), int(cs.height)
+            except Exception:
+                cw, ch = 10, 20
+            cmd += ["--vo-sixel-config-clear=yes", "--vo-sixel-alt-screen=yes",
+                    f"--vo-sixel-width={max(cols - 1, 20) * cw}", f"--vo-sixel-height={max(rows - 2, 10) * ch}",
+                    "--vo-sixel-dither=none"]
         with self.suspend():
             sys.stdout.write("\x1b[2J\x1b[H")  # clear the pane before mpv paints
             sys.stdout.flush()

@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from .state import CACHE, is_video
+from .state import CACHE, is_audio, is_video
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -49,7 +49,9 @@ def probe(path: Path) -> Info:
     try:
         out = subprocess.run(
             [FFPROBE, "-v", "error", "-select_streams", "v:0", "-show_entries",
-             "stream=width,height,r_frame_rate:format=duration", "-of", "json", str(path)],
+             "stream=width,height,r_frame_rate:format=duration", "-of", "json", str(path)]
+            if not is_audio(path) else
+            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
             capture_output=True, text=True, timeout=10,
         ).stdout
         d = json.loads(out or "{}")
@@ -59,6 +61,7 @@ def probe(path: Path) -> Info:
         if is_video(path):
             num, _, den = (st.get("r_frame_rate") or "0/1").partition("/")
             info.fps = round(float(num) / float(den or 1), 2) if float(den or 1) else 0.0
+        if is_video(path) or is_audio(path):
             info.duration = float((d.get("format") or {}).get("duration") or 0)
     except (subprocess.SubprocessError, ValueError, json.JSONDecodeError):
         pass
@@ -99,3 +102,17 @@ def extract_frames(path: Path, fps: int = 10, max_w: int = 640, max_seconds: int
                         "-vf", f"fps={fps},scale='min({max_w},iw)':-2", "-q:v", "4", str(d / "f%05d.jpg")],
                        capture_output=True, timeout=300)
     return sorted(d.glob("f*.jpg"))
+
+
+def waveform(path: Path, width: int = 1600, height: int = 400) -> Path | None:
+    """Waveform on black for audio files. Cached."""
+    if not FFMPEG:
+        return None
+    out = _cache_dir(path) / f"wave_{width}x{height}.png"
+    if out.exists():
+        return out
+    fc = (f"[0:a]showwavespic=s={width}x{height}:colors=#7dd3fc:scale=sqrt[w];"
+          f"color=c=black:s={width}x{height}[bg];[bg][w]overlay=format=auto")
+    r = subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(path), "-filter_complex", fc, "-frames:v", "1", str(out)],
+                       capture_output=True, timeout=120)
+    return out if r.returncode == 0 and out.exists() else None

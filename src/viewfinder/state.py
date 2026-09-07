@@ -18,7 +18,8 @@ PIDFILE = HOME / "pane.pid"
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".mxf"}
-MEDIA_EXT = IMAGE_EXT | VIDEO_EXT
+AUDIO_EXT = {".wav", ".mp3", ".aif", ".aiff", ".flac", ".ogg", ".m4a", ".opus"}
+MEDIA_EXT = IMAGE_EXT | VIDEO_EXT | AUDIO_EXT
 
 _WIN_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
@@ -35,6 +36,10 @@ def is_image(p: Path) -> bool:
 
 def is_video(p: Path) -> bool:
     return p.suffix.lower() in VIDEO_EXT
+
+
+def is_audio(p: Path) -> bool:
+    return p.suffix.lower() in AUDIO_EXT
 
 
 def is_media(p: Path) -> bool:
