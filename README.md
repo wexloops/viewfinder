@@ -1,6 +1,6 @@
 # Viewfinder
 
-**by HYPRGRPH**
+**by STRANGELOOP**
 
 A media pane beside your AI coding agent. When the agent reads or renders an image, it shows up here. Sharp images via Sixel or Kitty graphics, real-framerate video via mpv, a tree of the file's neighborhood, and a history grouped by project.
 

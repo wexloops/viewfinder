@@ -42,7 +42,7 @@ class GroupRow(ListItem):
 
 
 class Viewfinder(App):
-    TITLE = "Viewfinder by HYPRGRPH"
+    TITLE = "Viewfinder by STRANGELOOP"
     CSS = f"""
     Screen {{ background: black; color: #d4d4d4; }}
     #header {{ height: 2; padding: 0 1; color: #d4d4d4; }}
@@ -160,7 +160,7 @@ class Viewfinder(App):
     def _render_header(self, path: Path | None, note: str = "") -> None:
         hdr = self.query_one("#header", Static)
         if path is None:
-            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by HYPRGRPH[/]   [dim]waiting for media · {self.protocol}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
+            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by STRANGELOOP[/]   [dim]waiting for media · {self.protocol}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
             return
         meta = self.info.human() if self.info else ""
         hist = state.history()
@@ -169,7 +169,7 @@ class Viewfinder(App):
 
     def _render_footer(self, msg: str = "") -> None:
         keys = "space play  n/p  h history  y copy  o open  t tree  f full  q quit"
-        tail = msg or f"[{ACCENT}]VIEWFINDER[/] by HYPRGRPH"
+        tail = msg or f"[{ACCENT}]VIEWFINDER[/] by STRANGELOOP"
         self.query_one("#footer", Static).update(f"{keys}    [dim]{tail}[/]")
 
     # ----- tree ---------------------------------------------------------
