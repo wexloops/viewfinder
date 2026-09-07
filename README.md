@@ -6,15 +6,13 @@
 
 ## Why this exists
 
-I run Claude Code in a terminal all day and I make pictures for a living. Claude can look at a render and tell me the horizon is crooked, but I can't see what it's looking at without leaving the terminal to open the file. The chat app and the VS Code extension show images. The terminal doesn't. I didn't want to give up the terminal.
+Claude Code can read an image and reason about it, but the terminal it runs in never shows that image to you. To see what the agent is looking at, you leave the terminal and open the file somewhere else. The chat app and the VS Code extension render images inline. The terminal does not, and for a lot of people the terminal is the point.
 
-The obvious fix doesn't work. WezTerm, kitty, Ghostty, iTerm2, and Windows Terminal can all draw real images with Sixel or the Kitty graphics protocol. But Claude Code repaints its entire screen many times a second, and anything drawn into it is erased on the next frame. Anthropic has several open issues about this ([#36476](https://github.com/anthropics/claude-code/issues/36476), [#54546](https://github.com/anthropics/claude-code/issues/54546), [#6389](https://github.com/anthropics/claude-code/issues/6389)) and no fix, because the fix is architectural.
+Graphics-capable terminals don't solve this on their own. WezTerm, kitty, Ghostty, iTerm2, and Windows Terminal can all draw real images with Sixel or the Kitty graphics protocol, but Claude Code repaints its entire screen many times a second, and anything drawn into that screen is erased on the next frame. Several open issues track this ([#36476](https://github.com/anthropics/claude-code/issues/36476), [#54546](https://github.com/anthropics/claude-code/issues/54546), [#6389](https://github.com/anthropics/claude-code/issues/6389)) and there is no fix, because the fix is architectural.
 
-So the image has to live somewhere the agent isn't. Viewfinder is a second pane that the agent doesn't own. A five-line hook tells it which file the agent just read, and the pane draws it. You keep your terminal, your scrollback, your keybindings, and you get eyes.
+The image has to live somewhere the agent isn't. Viewfinder is a second pane that the agent does not own. A small hook reports which file the agent just read, and the pane draws it. The terminal, the scrollback, and the keybindings stay exactly as they were.
 
-It grew the things a review pane wants: video as a contact sheet and then a real player, audio as a waveform, a tree of the folder around the file so you can look at the neighbors, a history grouped by project so parallel agents don't blend into each other, and a key that copies the path so you can hand it to the next tool.
-
-Built in an afternoon with Claude Code, for Claude Code.
+Around that core are the things a review pane needs: video as a contact sheet with a real player behind it, audio as a waveform, a tree of the folder around the file, a history grouped by project so parallel agents stay separate, and a key that copies the path for the next tool.
 
 ## Install
 
