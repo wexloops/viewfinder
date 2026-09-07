@@ -10,16 +10,17 @@ from pathlib import Path
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 import time
 
 from textual.widgets import ListItem, ListView, Static
 
-from . import state
+from . import __version__, state
 from .media import Info, contact_sheet, extract_frames, probe, waveform
 
 ACCENT = "#7dd3fc"
 _UNSET = object()
+BRAND = "VIEWFINDER v" + ".".join(__version__.split(".")[:2]) + " by STRANGELOOP"
 
 
 def _image_widget_class(protocol: str):
@@ -47,7 +48,7 @@ class GroupRow(ListItem):
 
 
 class Viewfinder(App):
-    TITLE = "Viewfinder by STRANGELOOP"
+    TITLE = BRAND
     CSS = f"""
     Screen {{ background: black; color: #d4d4d4; }}
     #header {{ height: 2; padding: 0 1; color: #d4d4d4; }}
@@ -57,7 +58,9 @@ class Viewfinder(App):
     #tree {{ height: 12; background: black; border-top: solid #333333; scrollbar-size: 1 1; }}
     #tree ListItem {{ background: black; color: #a0a0a0; padding: 0 1; }}
     #tree ListItem.--highlight {{ background: #1e293b; color: {ACCENT}; }}
-    #footer {{ height: 1; padding: 0 1; color: #6b7280; background: black; }}
+    #footer {{ height: 1; padding: 0 1; background: black; }}
+    #keys {{ width: 1fr; color: #6b7280; overflow: hidden; }}
+    #brand {{ width: auto; color: #6b7280; text-align: right; }}
     .hidden {{ display: none; }}
     """
     BINDINGS = [
@@ -98,7 +101,9 @@ class Viewfinder(App):
         with Vertical(id="stage"):
             yield self._ImageWidget(None, id="viewer")
         yield ListView(id="tree")
-        yield Static("", id="footer")
+        with Horizontal(id="footer"):
+            yield Static("", id="keys")
+            yield Static("", id="brand")
 
     def on_mount(self) -> None:
         state.ensure_dirs()
@@ -112,6 +117,13 @@ class Viewfinder(App):
             self.show(hist[-1])
         elif self.size.width < 60:
             self.query_one("#tree").add_class("hidden")
+
+    def on_resize(self) -> None:
+        self._render_footer()
+        try:
+            self.query_one("#viewer").refresh(layout=True)
+        except Exception:
+            pass
 
     def on_unmount(self) -> None:
         try:
@@ -138,7 +150,8 @@ class Viewfinder(App):
     def show(self, path: Path, refresh_tree: bool = True) -> None:
         self._stop_player()
         self.current = path
-        self.info = probe(path)
+        self.info = None
+        self._probe(path)
         viewer = self.query_one("#viewer")
         if state.is_video(path):
             self._render_header(path, "contact sheet · space to play")
@@ -157,6 +170,19 @@ class Viewfinder(App):
         elif refresh_tree and self.tree_dir != path.parent:
             self._populate_tree(path.parent)
         self._highlight_in_tree(path)
+
+    @work(thread=True, exclusive=True, group="probe")
+    def _probe(self, path: Path) -> None:
+        info = probe(path)
+        if self.current == path:
+            self.call_from_thread(self._apply_info, path, info)
+
+    def _apply_info(self, path: Path, info: Info) -> None:
+        if self.current != path:
+            return
+        self.info = info
+        note = "contact sheet · space to play" if state.is_video(path) else ("waveform · space to play" if state.is_audio(path) else "")
+        self._render_header(path, note)
 
     @work(thread=True, exclusive=True, group="sheet")
     def _load_sheet(self, path: Path) -> None:
@@ -178,15 +204,17 @@ class Viewfinder(App):
         if path is None:
             hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by STRANGELOOP[/]   [dim]waiting for media · {self._effective_protocol()}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
             return
-        meta = self.info.human() if self.info else ""
+        meta = self.info.human() if self.info else "…"
         hist = state.history()
         pos = f"{self.idx + 1}/{len(hist)}" if hist and 0 <= self.idx < len(hist) else ""
         hdr.update(f"[{ACCENT} bold]{path.name}[/]  [dim]{pos}[/]\n[dim]{meta}   {note}[/]")
 
     def _render_footer(self, msg: str = "") -> None:
         keys = "space play  n/p  h hist  y copy  o open  t tree  f full  q quit"
-        tail = msg or f"[{ACCENT}]VIEWFINDER[/] by STRANGELOOP · {self._effective_protocol()}"
-        self.query_one("#footer", Static).update(f"{keys}    [dim]{tail}[/]")
+        self.query_one("#keys", Static).update(msg or keys)
+        w = self.size.width
+        brand = BRAND if w >= 90 else ("VIEWFINDER v" + ".".join(__version__.split(".")[:2]) if w >= 60 else "VF")
+        self.query_one("#brand", Static).update(f"[{ACCENT}]{brand}[/] [dim]{self._effective_protocol()}[/]")
 
     # ----- tree ---------------------------------------------------------
     def _populate_tree(self, d: Path) -> None:
