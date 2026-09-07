@@ -11,11 +11,24 @@ import sys
 from . import __version__, state
 
 
+def resolve_protocol(requested: str) -> str:
+    """'auto' = trust the terminal we can identify from the environment; probe only as a last resort.
+    The library's own probe waits 100ms for a reply that Windows Terminal over WSL often misses."""
+    if requested != "auto":
+        return requested
+    env = os.environ
+    if env.get("KITTY_WINDOW_ID") or env.get("TERM_PROGRAM") == "ghostty" or env.get("GHOSTTY_RESOURCES_DIR"):
+        return "tgp"
+    if env.get("WT_SESSION") or env.get("TERM_PROGRAM") in ("WezTerm", "iTerm.app") or env.get("WEZTERM_PANE"):
+        return "sixel"
+    return "auto"
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     import logging
     logging.getLogger("textual_image").setLevel(logging.CRITICAL)  # terminal probes that time out are normal
     from .app import Viewfinder
-    Viewfinder(protocol=args.protocol).run()
+    Viewfinder(protocol=resolve_protocol(args.protocol)).run()
     return 0
 
 
@@ -44,7 +57,7 @@ def cmd_open(args: argparse.Namespace) -> int:
         print("vf: pane already running")
         return 0
     vf = shutil.which("vf") or f"{sys.executable} -m viewfinder"
-    run = f"{vf} --protocol {args.protocol}"
+    run = f"{vf} --protocol {resolve_protocol(args.protocol)}"
     size = args.size
     env = os.environ
     if env.get("TMUX"):
