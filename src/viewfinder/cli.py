@@ -1,0 +1,113 @@
+"""vf: run the pane, push files to it, open it beside the current terminal, agent hooks."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+from . import __version__, state
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    import logging
+    logging.getLogger("textual_image").setLevel(logging.CRITICAL)  # terminal probes that time out are normal
+    from .app import Viewfinder
+    Viewfinder(protocol=args.protocol).run()
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    accepted = state.push(args.files, cwd=os.getcwd(), agent="cli")
+    missing = [f for f in args.files if state.normalize(f) not in accepted]
+    for m in missing:
+        print(f"vf show: skipped (missing or not media): {m}", file=sys.stderr)
+    return 0 if accepted else 1
+
+
+def _pane_running() -> bool:
+    try:
+        pid = int(state.PIDFILE.read_text().strip())
+        os.kill(pid, 0)
+        return True
+    except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
+        return False
+
+
+def cmd_open(args: argparse.Namespace) -> int:
+    """Split the current terminal and start the pane in the new half."""
+    if _pane_running():
+        if args.files:
+            return cmd_show(args)
+        print("vf: pane already running")
+        return 0
+    vf = shutil.which("vf") or f"{sys.executable} -m viewfinder"
+    run = f"{vf} --protocol {args.protocol}"
+    size = args.size
+    env = os.environ
+    if env.get("TMUX"):
+        cmd = ["tmux", "split-window", "-h", "-l", f"{int(size * 100)}%", run]
+    elif env.get("WT_SESSION") and shutil.which("wt.exe"):
+        inner = run
+        if env.get("WSL_DISTRO_NAME"):
+            inner = f"wsl.exe -d {env['WSL_DISTRO_NAME']} --cd {os.getcwd()} -- bash -lc '{run}'"
+        cmd = ["wt.exe", "-w", "0", "split-pane", "-V", "--size", str(size), "--title", "Viewfinder", *inner.split()]
+    elif env.get("TERM_PROGRAM") == "WezTerm" and shutil.which("wezterm") and not env.get("WSL_DISTRO_NAME"):
+        cmd = ["wezterm", "cli", "split-pane", "--right", "--percent", str(int(size * 100)), "--", *run.split()]
+    elif env.get("KITTY_WINDOW_ID") and shutil.which("kitten"):
+        cmd = ["kitten", "@", "launch", "--location=vsplit", "--cwd=current", *run.split()]
+    else:
+        print("vf open: don't know how to split this terminal. Open a split yourself and run: vf", file=sys.stderr)
+        return 2
+    try:
+        subprocess.run(cmd, check=True)
+    except (subprocess.CalledProcessError, OSError) as e:
+        print(f"vf open: split failed: {e}", file=sys.stderr)
+        return 2
+    if args.files:
+        return cmd_show(args)
+    return 0
+
+
+def cmd_hook(args: argparse.Namespace) -> int:
+    """Agent hook adapters. Read JSON on stdin, push any media path found. Always exit 0."""
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, OSError):
+        return 0
+    paths: list[str] = []
+    if args.agent == "claude":
+        ti = payload.get("tool_input") or {}
+        for key in ("file_path", "path"):
+            if isinstance(ti.get(key), str):
+                paths.append(ti[key])
+    elif args.agent == "codex":
+        # Codex CLI hook payloads carry the tool call; accept the same shapes.
+        ti = payload.get("tool_input") or payload.get("input") or {}
+        for key in ("file_path", "path"):
+            if isinstance(ti.get(key), str):
+                paths.append(ti[key])
+    if paths:
+        state.push(paths, cwd=payload.get("cwd") or os.getcwd(), session=str(payload.get("session_id") or ""), agent=args.agent)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="vf", description="Viewfinder: a media pane beside your AI coding agent.")
+    ap.add_argument("--version", action="version", version=f"viewfinder {__version__}")
+    ap.add_argument("--protocol", choices=["auto", "sixel", "tgp", "halfcell", "unicode"], default="auto",
+                    help="image protocol for the pane (default: auto-detect)")
+    sub = ap.add_subparsers(dest="cmd")
+    s = sub.add_parser("show", help="push files to the pane"); s.add_argument("files", nargs="+")
+    o = sub.add_parser("open", help="split the current terminal and start the pane")
+    o.add_argument("files", nargs="*"); o.add_argument("--size", type=float, default=0.42)
+    o.add_argument("--protocol", choices=["auto", "sixel", "tgp", "halfcell", "unicode"], default="auto")
+    h = sub.add_parser("hook", help="agent hook adapter (reads JSON on stdin)"); h.add_argument("agent", choices=["claude", "codex"])
+    args = ap.parse_args(argv)
+    return {"show": cmd_show, "open": cmd_open, "hook": cmd_hook}.get(args.cmd, cmd_run)(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
