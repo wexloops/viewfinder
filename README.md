@@ -2,8 +2,6 @@
 
 **A media pane beside your AI coding agent.** When Claude Code reads an image, it shows up here, sharp, in your terminal. Video plays at full frame rate. Audio gets a waveform. Nothing to type.
 
-*VIEWFINDER by STRANGELOOP*
-
 ![Viewfinder showing a render, with the folder tree below it](docs/viewfinder.png)
 
 ## Why this exists

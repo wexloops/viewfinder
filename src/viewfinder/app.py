@@ -20,7 +20,7 @@ from .media import Info, contact_sheet, extract_frames, probe, waveform
 
 ACCENT = "#7dd3fc"
 _UNSET = object()
-BRAND = "VIEWFINDER v" + ".".join(__version__.split(".")[:2]) + " by STRANGELOOP"
+BRAND = "VIEWFINDER v" + ".".join(__version__.split(".")[:2])
 
 
 def _image_widget_class(protocol: str):
@@ -204,7 +204,7 @@ class Viewfinder(App):
     def _render_header(self, path: Path | None, note: str = "") -> None:
         hdr = self.query_one("#header", Static)
         if path is None:
-            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/] [dim]by STRANGELOOP[/]   [dim]waiting for media · {self._effective_protocol()}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
+            hdr.update(f"[{ACCENT} bold]VIEWFINDER[/]   [dim]waiting for media · {self._effective_protocol()}[/]\n[dim]vf show FILE, or let your agent read an image[/]")
             return
         meta = self.info.human() if self.info else "…"
         hist = state.history()
@@ -215,7 +215,7 @@ class Viewfinder(App):
         keys = "space play  n/p  h hist  y copy  o open  t tree  f full  q quit"
         self.query_one("#keys", Static).update(msg or keys)
         w = self.size.width
-        brand = BRAND if w >= 90 else ("VIEWFINDER v" + ".".join(__version__.split(".")[:2]) if w >= 60 else "VF")
+        brand = BRAND if w >= 60 else "VF"
         self.query_one("#brand", Static).update(f"[{ACCENT}]{brand}[/]")
 
     # ----- tree ---------------------------------------------------------
