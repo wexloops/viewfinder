@@ -214,7 +214,7 @@ class Viewfinder(App):
         self.query_one("#keys", Static).update(msg or keys)
         w = self.size.width
         brand = BRAND if w >= 90 else ("VIEWFINDER v" + ".".join(__version__.split(".")[:2]) if w >= 60 else "VF")
-        self.query_one("#brand", Static).update(f"[{ACCENT}]{brand}[/] [dim]{self._effective_protocol()}[/]")
+        self.query_one("#brand", Static).update(f"[{ACCENT}]{brand}[/]")
 
     # ----- tree ---------------------------------------------------------
     def _populate_tree(self, d: Path) -> None:
