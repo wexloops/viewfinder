@@ -46,15 +46,24 @@ def is_media(p: Path) -> bool:
     return p.suffix.lower() in MEDIA_EXT
 
 
-def normalize(raw: str) -> Path:
-    """Resolve a user/agent supplied path. Windows paths are converted under WSL."""
+def kind(p: Path) -> str:
+    """'image', 'video', 'audio', or '' for anything else."""
+    return "image" if is_image(p) else "video" if is_video(p) else "audio" if is_audio(p) else ""
+
+
+def normalize(raw: str, base: str | None = None) -> Path:
+    """Resolve a user/agent supplied path. Windows paths are converted under WSL.
+    Relative paths resolve against BASE (the agent's cwd) when given."""
     s = raw.strip()
     if _WIN_PATH.match(s) and shutil.which("wslpath"):
         try:
             s = subprocess.run(["wslpath", "-u", s], capture_output=True, text=True, check=True).stdout.strip()
         except subprocess.CalledProcessError:
             pass
-    return Path(s).expanduser().resolve()
+    p = Path(s).expanduser()
+    if base and not p.is_absolute():
+        p = Path(base) / p
+    return p.resolve()
 
 
 @dataclass
@@ -78,7 +87,7 @@ def push(paths: list[str], *, cwd: str | None = None, session: str = "", agent: 
     project = Path(cwd).name or cwd
     accepted: list[Path] = []
     for raw in paths:
-        p = normalize(raw)
+        p = normalize(raw, cwd)
         if not p.exists() or not is_media(p):
             continue
         accepted.append(p)
