@@ -2,6 +2,8 @@
 
 **A media pane beside your AI coding agent.** When Claude Code reads an image, it shows up here, sharp, in your terminal. Video plays at full frame rate. Audio gets a waveform. Nothing to type.
 
+<sub>An open-source tool from <a href="https://hyprgrph.xyz"><b>HYPRGRPH</b></a> · <a href="https://hyprgrph.xyz/#source">more tools</a></sub>
+
 ![Viewfinder showing a render, with the folder tree below it](docs/viewfinder.png)
 
 ## Why this exists
@@ -90,4 +92,8 @@ Force a protocol with `vf --protocol sixel|tgp|halfcell|unicode` if detection ge
 
 ## License
 
-MIT. Built by [David Wexler](https://strangeloop-studios.com) at Strangeloop Studios.
+MIT. Built by [David Wexler](https://strangeloop-studios.com) for [HYPRGRPH](https://hyprgrph.xyz).
+
+---
+
+<p align="center"><a href="https://hyprgrph.xyz"><b>HYPRGRPH</b></a><br><sub>Viewfinder is one of the tools HYPRGRPH builds for its own work and shares openly. See the rest at <a href="https://hyprgrph.xyz/#source">hyprgrph.xyz</a>.</sub></p>
